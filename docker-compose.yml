@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  financial-market-agent:
+    build: .
+    ports:
+      - "8000:8000"  # FastAPI
+      - "8501:8501"  # Streamlit
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=8000
+      - STREAMLIT_PORT=8501
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY}
+      - DEBUG=True
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
