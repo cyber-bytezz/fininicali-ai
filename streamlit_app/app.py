@@ -31,7 +31,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants
-API_URL = f"http://localhost:{os.getenv('PORT', '8000')}"
+# In cloud deployment, we won't have a local API
+API_URL = os.getenv('API_URL', '')
 
 # Page configuration
 st.set_page_config(
@@ -46,54 +47,113 @@ def get_api_url():
     """Get the API URL."""
     return API_URL
 
-async def call_api(endpoint, method="GET", data=None, retry_count=3, retry_delay=1.5):
+# In cloud mode, we use mock data instead of API calls
+def get_mock_response(query, voice_output=False, region=None):
     """
-    Call the API asynchronously with retry logic.
+    Generate mock responses based on the user's query.
     
     Args:
-        endpoint: API endpoint
-        method: HTTP method
-        data: Request data
-        retry_count: Number of retry attempts
-        retry_delay: Delay between retries in seconds
-        
+        query: User's question
+        voice_output: Whether voice output is enabled
+        region: Selected region filter
+    
     Returns:
-        API response or error dict
+        Mock response data
     """
-    url = f"{get_api_url()}/{endpoint}"
+    # Default response
+    response = {
+        "response": "I don't have specific information on that topic in demo mode.",
+        "portfolio_data": None,
+        "sentiment_data": None,
+        "earnings_data": None
+    }
     
-    for attempt in range(retry_count):
-        try:
-            async with httpx.AsyncClient() as client:
-                if method == "GET":
-                    response = await client.get(url, timeout=30.0)
-                elif method == "POST":
-                    response = await client.post(url, json=data, timeout=60.0)
-                else:
-                    logger.error(f"Unsupported method: {method}")
-                    return {"error": f"Unsupported method: {method}"}
-                    
-                response.raise_for_status()
-                return response.json()
-                
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error (attempt {attempt+1}/{retry_count}): {e}")
-            if attempt == retry_count - 1:
-                return {"error": f"HTTP error: {str(e)}"}
-        except httpx.RequestError as e:
-            logger.error(f"Request error (attempt {attempt+1}/{retry_count}): {e}")
-            if attempt == retry_count - 1:
-                return {"error": f"Cannot connect to API service. Please ensure the server is running at {url}"}
-        except Exception as e:
-            logger.error(f"Error calling API (attempt {attempt+1}/{retry_count}): {e}")
-            if attempt == retry_count - 1:
-                return {"error": f"Unexpected error: {str(e)}"}
+    # Portfolio allocation query
+    if any(keyword in query.lower() for keyword in ["risk", "exposure", "allocation", "portfolio"]):
+        if region and region.lower() == "asia":
+            response["response"] = "Your Asia tech allocation is currently 25.0% of AUM, up 2.5% from yesterday. This exposure is driven primarily by positions in TSMC, Samsung, and SoftBank."
+            response["portfolio_data"] = {
+                "current_allocation": 25.0,
+                "previous_allocation": 22.5,
+                "change": 2.5,
+                "by_region": {
+                    "Asia": 25.0,
+                    "US": 45.0,
+                    "Europe": 20.0,
+                    "Other": 10.0
+                },
+                "by_sector": {
+                    "Technology": 40.0,
+                    "Healthcare": 15.0,
+                    "Finance": 20.0,
+                    "Energy": 10.0,
+                    "Consumer": 15.0
+                }
+            }
+        else:
+            response["response"] = "Your overall portfolio allocation shows a 45% exposure to US markets, 25% to Asia, 20% to Europe, and 10% to other markets. Technology remains your largest sector at 40%."
+            response["portfolio_data"] = {
+                "by_region": {
+                    "US": 45.0,
+                    "Asia": 25.0,
+                    "Europe": 20.0,
+                    "Other": 10.0
+                },
+                "by_sector": {
+                    "Technology": 40.0,
+                    "Healthcare": 15.0,
+                    "Finance": 20.0,
+                    "Energy": 10.0,
+                    "Consumer": 15.0
+                }
+            }
+    
+    # Earnings query
+    elif any(keyword in query.lower() for keyword in ["earning", "surprises", "quarterly", "profit"]):
+        response["response"] = "This week had several notable earnings surprises. NVIDIA beat expectations by 15%, while Netflix missed by 3.2%. The technology sector overall showed stronger-than-expected growth."
+        response["earnings_data"] = {
+            "positive_surprises": [
+                {"symbol": "NVDA", "company": "NVIDIA", "surprise_pct": 15.0},
+                {"symbol": "MSFT", "company": "Microsoft", "surprise_pct": 8.5},
+                {"symbol": "AAPL", "company": "Apple", "surprise_pct": 4.2}
+            ],
+            "negative_surprises": [
+                {"symbol": "NFLX", "company": "Netflix", "surprise_pct": -3.2},
+                {"symbol": "META", "company": "Meta Platforms", "surprise_pct": -2.1},
+                {"symbol": "AMZN", "company": "Amazon", "surprise_pct": -1.5}
+            ]
+        }
+    
+    # Sentiment query
+    elif any(keyword in query.lower() for keyword in ["sentiment", "mood", "outlook", "bull", "bear"]):
+        if region and region.lower() == "europe":
+            response["response"] = "Market sentiment in Europe is currently somewhat bearish due to ongoing inflation concerns and energy price volatility. The ECB's recent policy statement has created uncertainty."
+            response["sentiment_data"] = "somewhat bearish"
+        else:
+            response["response"] = "Overall market sentiment is neutral with a slight bullish bias. While tech stocks show positive momentum, concerns about interest rates are tempering overall enthusiasm."
+            response["sentiment_data"] = "neutral"
+    
+    # Sector performance
+    elif any(keyword in query.lower() for keyword in ["sector", "performing", "performance"]):
+        response["response"] = "Today's top performing sectors are Technology (+1.8%), Healthcare (+1.2%), and Energy (+0.9%). Financial services are underperforming with a 0.5% decline."
         
-        # Wait before retrying
-        if attempt < retry_count - 1:
-            await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+    return response
+
+async def call_api(endpoint, method="GET", data=None, retry_count=3, retry_delay=1.5):
+    """
+    In cloud mode, this returns mock data instead of calling a real API
+    """
+    # For cloud deployment, we use mock data
+    if endpoint == "orchestrate" and method == "POST":
+        return get_mock_response(
+            query=data.get("query", ""),
+            voice_output=data.get("voice_output", False),
+            region=data.get("region")
+        )
+    elif endpoint == "health":
+        return {"status": "ok", "timestamp": datetime.now().isoformat()}
     
-    return {"error": "Maximum retry attempts exceeded"}
+    return {"error": "Endpoint not available in demo mode"}
 
 def run_async(func):
     """
@@ -126,8 +186,12 @@ def set_example_query(query):
     st.session_state.example_query = query
 
 # App layout
-def main():
-    """Main app function."""
+def main(cloud_mode=True):
+    """Main app function.
+    
+    Args:
+        cloud_mode: Whether the app is running in cloud mode (without FastAPI backend)
+    """
     # Sidebar
     with st.sidebar:
         st.image("https://img.icons8.com/color/96/000000/financial-analytics.png", width=100)

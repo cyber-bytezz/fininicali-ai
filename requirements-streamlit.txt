@@ -1,0 +1,20 @@
+# Streamlit and UI
+streamlit>=1.28.0
+pandas<2.1.0
+numpy<2.0.0
+plotly>=5.18.0
+httpx>=0.25.0
+
+# Data Processing
+yfinance>=0.2.31
+alpha_vantage>=2.3.1
+beautifulsoup4>=4.12.2
+
+# Utils
+python-dotenv>=1.0.0
+
+# These are optional and commented out due to compatibility issues
+# openai-whisper==20231117  # Removed due to triton dependency issues
+# together==0.2.5  # Optional, add back if needed
+# langchain==0.0.351  # Optional, add back if needed
+# pyttsx3==2.90  # Optional, add back if needed
